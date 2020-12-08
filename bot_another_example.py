@@ -50,4 +50,4 @@ async def on_error(event, *args, **kwargs):
             f.write(f'Unhandled message: {args[0]}\n')
         else:
             raise
-client.run('NzEyNjQ1NzgwODk2MjE5MTU2.XsUlJA.tUhEN7vn5hdvVEb_qO6BHSY_4KU')
+client.run('**********************')
