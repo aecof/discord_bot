@@ -14,6 +14,10 @@ USERS = {}
 
 bot = commands.Bot(command_prefix='!')
 
+@bot.command(name='clear', help='Clear the current channel')
+async def clear(ctx):
+    await ctx.channel.purge(limit = 1000)
+
 @bot.command(name='launch-game', help='Initialize and prepare a game (admin only)')
 @commands.has_role('Admin')
 async def launch_game(ctx, duration='24'):
@@ -33,9 +37,22 @@ async def join_game(ctx):
     global USERS
 
     if GAME_RUNNING:
-        add_user(ctx.author.id,ctx.author.name)
-        print(USERS)
-        await ctx.send(f"Welcome on the ship {ctx.message.author.name}!")
+        if ctx.author.id not in USERS:
+            add_user(ctx.author.id,ctx.author.name)
+            await ctx.send(f"Welcome on the ship {ctx.message.author.name}!")
+        else:
+            await ctx.send(f"{ctx.message.author.name}, you're already on the ship")
+    else:
+        await ctx.send("There are no game currently running")
+
+@bot.command(name='leave-game', help='Leave the game created by the administrator')
+async def leave_game(ctx):
+    global GAME_RUNNING
+    global USERS
+
+    if GAME_RUNNING:
+        remove_user(ctx.author.id)
+        await ctx.send(f"{ctx.message.author.name} has left the game")
     else:
         await ctx.send("There are no game currently running")
 
@@ -45,10 +62,18 @@ async def players_in_game(ctx):
     global USERS
 
     if GAME_RUNNING:
-        if len(USERS):
-            await ctx.send(f"There are {len(USERS)} players on the game :")
+        nb_users = len(USERS)
+        if nb_users:
+            if nb_users == 1:
+                await ctx.send("There is one player on the ship :")
+            else:
+                await ctx.send(f"There are {nb_users} players on the ship :")
             for user in USERS:
                 await ctx.send(f" - {USERS[user]['name']}")
+        else:
+            await ctx.send("There is no one in the ship right now")
+    else:
+        await ctx.send("There are no game currently running")
 
 
 # Different functions that has to be called by the bot to manage variables and players.
@@ -67,7 +92,10 @@ def add_user(user_id,user_name):
     }
     USERS[user_id] = user_dict
 
+def remove_user(user_id):
+    global USERS
 
+    del USERS[user_id]
 
 
 
