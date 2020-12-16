@@ -17,8 +17,38 @@ LOG_FILE = ''
 GAME_OPENED = False
 GAME_RUNNING = False
 USERS = {}
+DOCTORS_CHANNEL = {'channel': None, 'kill_heal_msg': None, 'vote_msg1': None,'vote_msg2': None}
+MUTANTS_CHANNEL = {'channel': None, 'kill_mute_msg': None, 'vote_msg1': None, 'vote_msg2': None}
+ALPHABET = [
+            "\N{REGIONAL INDICATOR SYMBOL LETTER A}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER B}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER C}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER D}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER E}", 
+            "\N{REGIONAL INDICATOR SYMBOL LETTER F}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER G}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER H}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER I}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER J}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER K}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER L}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER M}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER N}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER O}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER P}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER Q}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER R}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER S}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER T}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER U}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER V}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER W}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER X}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER Y}",
+            "\N{REGIONAL INDICATOR SYMBOL LETTER Z}"
+        ]
 # ROLES = ['Initial_mutant', 'Doctor', 'Doctor', 'Computer Scientist', 'Psychologist', 'Spy', 'Astronaut']
-ROLES = ['Initial_mutant']
+ROLES = ['Initial_mutant','Doctor']
 NIGHT = False
 
 intents = discord.Intents.all()
@@ -45,7 +75,7 @@ async def on_member_remove(member):
 async def clear(ctx):
     await ctx.channel.purge(limit = 1000)
 
-@bot.command(name='launch-game', help='Initialize and prepare a game (admin only)')
+@bot.command(name='l', help='Initialize and prepare a game (admin only)')
 @commands.has_role('Admin')
 async def launch_game(ctx, duration='24'):
     global GAME_OPENED
@@ -61,7 +91,7 @@ async def launch_game(ctx, duration='24'):
     else:
         await ctx.send("A game is already running")
 
-@bot.command(name='join-game', help='Join the game created by the administrator')
+@bot.command(name='j', help='Join the game created by the administrator')
 async def join_game(ctx):
     global GAME_OPENED
     global GAME_RUNNING
@@ -107,12 +137,13 @@ async def players_in_game(ctx):
     else:
         await ctx.send("There are no game currently running")
 
-@bot.command(name='sporz-play', help='Start the Sporz game')
+@bot.command(name='p', help='Start the Sporz game')
 @commands.has_role('Admin')
 async def start_game(ctx):
     global GAME_OPENED
     global USERS
     global GAME_RUNNING
+    global DOCTORS_CHANNEL
 
     if GAME_OPENED and not GAME_RUNNING:
         if len(USERS) >= 0:  
@@ -152,6 +183,7 @@ async def start_game(ctx):
                     overwrites[doctor] = discord.PermissionOverwrite(view_channel=True,read_messages=True,send_messages=True)
                     msg_doctor += f"{doctor.mention} "
                 doctors_channel = await guild.create_text_channel('doctors',overwrites=overwrites)
+                DOCTORS_CHANNEL['channel'] = doctors_channel
                 await doctors_channel.send("Welcome on this private channel for doctors only")
                 for doctor in doctors:
                     await doctors_channel.send(f"{msg_doctor} you are the two doctors of this ship" )
@@ -162,11 +194,14 @@ async def start_game(ctx):
     else:
         await ctx.send("There are no game currently running")
 
-@bot.command(name='night', help='Launch a night')
+@bot.command(name='n', help='Launch a night')
 @commands.has_role('Admin')
 async def night(ctx):
     global USERS
     global GAME_RUNNING
+    global ALPHABET
+    global MUTANTS_CHANNEL
+    global DOCTORS_CHANNEL
 
     await ctx.send("The night begins, the whole ship falls asleep")
     mutants = get_mutants(ctx,USERS)
@@ -179,14 +214,23 @@ async def night(ctx):
     for mutant in mutants:
         overwrites[mutant] = discord.PermissionOverwrite(view_channel=True,read_messages=True,send_messages=True)
     mutants_channel = await guild.create_text_channel('mutants',overwrites=overwrites)
-    await mutants_channel.send("The mutants awake\n You have to chose one people to infect and one people to paralyse this night !")
-    await mutants_channel.send("The mutants awake")
+    MUTANTS_CHANNEL['channel'] = mutants_channel
+    await mutants_channel.send("The mutants awake\nYou have to chose one people to infect and one people to paralyse this night !")
+    not_mutants = get_not_mutants(ctx,USERS)
+    choices = {}
+    for i,not_mutant in enumerate(not_mutants):
+        choices[ALPHABET[i]] = not_mutant
+    message='Hello U'
+    await channel_vote(mutants_channel,message,choices)
+    await asyncio.sleep(20)
+    message = MUTANTS_CHANNEL['vote_msg1']
+    await get_results_vote(bot,mutants_channel,message,choices)
 
 
 
 
-
-    # mutants_channel.delete()
+    await mutants_channel.delete()
+    await DOCTORS_CHANNEL['channel'].delete()
 
 
 
@@ -259,5 +303,33 @@ def get_mutants(ctx,users):
             players.append(member_obj)
     return players
 
-bot.run(TOKEN)
+def get_not_mutants(ctx,users):
+    players = []
+    for member in users:
+        if not users[member]['mutant']:
+            member_obj = ctx.guild.get_member(member)
+            players.append(member_obj)
+    return players
 
+async def channel_vote(channel,message,choices):
+    global MUTANTS_CHANNEL
+
+    vote = discord.Embed(title="**[VOTE]**", description=" ", color=0x00ff00)
+    value = "\n".join("- {} {}".format(item[0],item[1].name) for item in choices.items())
+    vote.add_field(name=message, value=value, inline=True)
+
+    message_1 = await channel.send(embed=vote)
+
+    for choice in choices:
+        await message_1.add_reaction(choice)
+
+    MUTANTS_CHANNEL['vote_msg1'] = message_1
+
+async def get_results_vote(bot,channel,message,choices):
+    message_1 = discord.utils.get(await channel.history(limit=100).flatten(), id=message.id)
+    # message_1 = await bot.get_message(channel,message.id)
+    counts = {react.emoji: react.count for react in message_1.reactions}
+    winner = max(choices, key=counts.get)
+    print(f"The winner is : {choices[winner].name}")
+
+bot.run(TOKEN)
